@@ -1,157 +1,166 @@
 import random
 
+# Recursive Function: Show Tree
 def show_recursive(tree, node_index=0, level=0):
-    """Fully recursive function to print the tree structure."""
-    print('   ' * level + '{}-'.format(node_index), end="")
-    print('{}'.format(tree[node_index]['name']), end="")
-    print('#{}'.format(tree[node_index]['ancestor']), end="")
-    if tree[node_index]['type'] == 't':
-        print("(t){}".format(tree[node_index]['pay']))
-    elif tree[node_index]['type'] == 'd':
+    """Displays the decision tree structure recursively."""
+    if node_index >= len(tree):
+        print(f"Error: Node index {node_index} out of range.")
+        return
+    node = tree[node_index]
+    if 'name' not in node:
+        print(f"Error: 'name' key missing in node {node_index}. Node details: {node}")
+        return
+    print('   ' * level + f"{node_index}-{node.get('name', 'Unknown')}#{node.get('ancestor', -1)}", end="")
+    if node['type'] == 't':
+        print(f"(t) {node.get('pay', 0.0)}")
+    elif node['type'] == 'd':
         print("(d)")
-        for descendant in tree[node_index]['descendants']:
+        for descendant in node.get('descendants', []):
             show_recursive(tree, descendant, level + 1)
-    elif tree[node_index]['type'] == 'n':
-        print("(n)[", end="")
-        print(', '.join(map(str, tree[node_index]['probabilities'])), end="")
-        print(']')
-        for descendant in tree[node_index]['descendants']:
+    elif node['type'] == 'n':
+        print(f"(n)[{', '.join(map(str, node.get('probabilities', [])))}]")
+        for descendant in node.get('descendants', []):
             show_recursive(tree, descendant, level + 1)
 
+# Recursive Function: Solve Tree
 def solve_recursive(tree, node_index=0):
-    """Recursive function for solving decision tree with backward induction."""
+    """Recursively computes the optimal strategy using backward induction."""
     node = tree[node_index]
-    if node['type'] == 't':
-        # Base case for terminal node
+    if node['type'] == 't':  # Terminal node
         return node['pay']
-    elif node['type'] == 'd':
-        # Decision node: maximize value among descendants
-        subvalues = [(descendant, solve_recursive(tree, descendant)) for descendant in node['descendants']]
+    elif node['type'] == 'n':  # Nature node
+        subvalue = sum(prob * solve_recursive(tree, desc)
+                       for prob, desc in zip(node.get('probabilities', []), node.get('descendants', [])))
+        node['subvalue'] = subvalue
+        return subvalue
+    elif node['type'] == 'd':  # Decision node
+        subvalues = [(desc, solve_recursive(tree, desc)) for desc in node.get('descendants', [])]
         best_descendant, best_value = max(subvalues, key=lambda x: x[1])
         node['subvalue'] = best_value
-        node['used'] = True
+        node['best_descendant'] = best_descendant
         return best_value
-    elif node['type'] == 'n':
-        # Nature node: calculate expected value
-        expected_value = sum(prob * solve_recursive(tree, desc)
-                             for prob, desc in zip(node['probabilities'], node['descendants']))
-        node['subvalue'] = expected_value
-        node['used'] = True
-        return expected_value
 
-def play_recursive(tree, strategy, node_index=0):
-    """Recursive function to play the tree according to strategy."""
-    node = tree[node_index]
-    if node['type'] == 't':
-        return node_index, node['name'], node['pay']
-    elif node['type'] == 'd':
-        next_node = strategy[node_index]
-        return play_recursive(tree, strategy, next_node)
-    elif node['type'] == 'n':
-        random_prob = random.random()
-        cumulative = 0.0
-        for prob, desc in zip(node['probabilities'], node['descendants']):
-            cumulative += prob
-            if random_prob <= cumulative:
-                return play_recursive(tree, strategy, desc)
-
-def simulate_recursive(strategy, tree, trials=20):
-    """Recursive function for simulating the strategy over multiple trials."""
+# Recursive Function: Simulate Strategy
+def simulate_recursive(tree, strategy, node_index=0, trials=1):
+    """Simulates paths through the tree based on the given strategy."""
     if trials == 0:
         return []
-    result = play_recursive(tree, strategy)
-    return [result] + simulate_recursive(strategy, tree, trials - 1)
+    node = tree[node_index]
+    if node['type'] == 't':  # Terminal node
+        return [(node_index, node['name'], node['pay'])]
+    elif node['type'] == 'd':  # Decision node
+        next_node = strategy.get(node_index, node['descendants'][0])
+        return simulate_recursive(tree, strategy, next_node, trials)
+    elif node['type'] == 'n':  # Nature node
+        cumulative, random_value = 0, random.random()
+        for prob, desc in zip(node.get('probabilities', []), node.get('descendants', [])):
+            cumulative += prob
+            if random_value <= cumulative:
+                return simulate_recursive(tree, strategy, desc, trials)
 
-def monte_carlo(first_strategy, second_strategy, tree, start, increment):
-    """Monte Carlo simulation for decision tree strategies."""
-    num_trials = start
-    for _ in range(10):
-        one_count, two_count = tournament(first_strategy, second_strategy, tree, num_trials)
-        print(f"Trials: {num_trials}, Strategy 1 Wins: {one_count}, Strategy 2 Wins: {two_count}")
-        num_trials += increment
+# Recursive Function: Monte Carlo Simulation
+def monte_carlo_recursive(tree, strategy, trials, current=0, results=None):
+    """Recursively performs Monte Carlo simulations."""
+    if results is None:
+        results = []
+    if trials == 0:
+        return results
+    outcome = simulate_recursive(tree, strategy, current)
+    results.append(outcome[-1][-1])  # Collect final payoff
+    return monte_carlo_recursive(tree, strategy, trials - 1, current, results)
 
-def tournament(strategy_one, strategy_two, tree, num_trials):
-    """Runs a tournament to compare two strategies."""
-    wins_one = wins_two = 0
-    for _ in range(num_trials):
-        outcome_one = simulate_recursive(strategy_one, tree, 1)[0]
-        outcome_two = simulate_recursive(strategy_two, tree, 1)[0]
-        if outcome_one[2] >= outcome_two[2]:
-            wins_one += 1
-        else:
-            wins_two += 1
-    return wins_one, wins_two
+# Recursive Function: Path Analysis
+def path_analysis_recursive(tree, node_index=0, path=None):
+    """Recursively explores all paths through the tree."""
+    if path is None:
+        path = []
+    node = tree[node_index]
+    path.append((node_index, node['name']))
+    if node['type'] == 't':  # Terminal node
+        print(" -> ".join(f"{idx}({name})" for idx, name in path))
+    elif node['type'] in ['d', 'n']:
+        for desc in node.get('descendants', []):
+            path_analysis_recursive(tree, desc, path[:])
 
+# Helper: Load Tree
 def load_tree(filename):
-    """Load a tree from a file."""
+    """Load a tree from a file and dynamically compute 'ancestor' keys."""
     tree = []
     with open(filename, 'r') as file:
         node_data = {}
         for line in file:
             key, value = line.strip().split(',', 1)
             if key == 'node':
+                # Save the current node and initialize a new one
                 if node_data:
                     tree.append(node_data)
-                node_data = {'descendants': [], 'probabilities': []}
+                node_data = {'descendants': [], 'probabilities': [], 'ancestor': -1}  # Initialize ancestor
             elif key.startswith('descendant'):
                 node_data['descendants'].append(int(value))
             elif key.startswith('prob'):
                 node_data['probabilities'].append(float(value))
+            elif key == 'pay':
+                node_data[key] = float(value)
             else:
-                node_data[key] = value if key != 'pay' else float(value)
-        tree.append(node_data)  # Add the last node
+                node_data[key] = value
+        if node_data:  # Add the last node
+            tree.append(node_data)
+    
+    # Ensure all nodes have required keys
+    for i, node in enumerate(tree):
+        node.setdefault('name', f"Node_{i}")  # Assign default name if missing
+        node.setdefault('type', 'unknown')  # Default type for debugging
+        node.setdefault('descendants', [])
+        node.setdefault('probabilities', [])
+        node.setdefault('ancestor', -1)
+
+    # Assign 'ancestor' values dynamically
+    for parent_index, parent_node in enumerate(tree):
+        for descendant_index in parent_node.get('descendants', []):
+            if 0 <= descendant_index < len(tree):
+                tree[descendant_index]['ancestor'] = parent_index
+            else:
+                print(f"Error: Descendant {descendant_index} out of bounds for parent {parent_index}")
+
+    # Debug: Print tree to confirm structure
+    print("\nFinal tree structure (after assigning ancestors):")
+    for i, node in enumerate(tree):
+        print(f"Node {i}: {node}")
+
     return tree
 
-def save_tree(tree, filename):
-    """Save a tree to a file."""
-    with open(filename, 'w') as file:
-        for idx, node in enumerate(tree):
-            file.write(f"node,{idx}\n")
-            for key, value in node.items():
-                if key in ['descendants', 'probabilities']:
-                    for item in value:
-                        file.write(f"{key},{item}\n")
-                else:
-                    file.write(f"{key},{value}\n")
-
+# Main Execution
 def main():
-    """Main interactive menu."""
+    """Interactive menu for the Decision Tree project."""
+    tree = []  # Placeholder for loaded tree
+    strategy = {}  # Example strategy
     print("Welcome to the Recursive Decision Tree Program!")
-    tree = []
     while True:
         print("\nMenu:")
         print("1. Load Tree")
         print("2. Show Tree")
         print("3. Solve Tree")
         print("4. Simulate Strategy")
-        print("5. Monte Carlo")
-        print("6. Save Tree")
+        print("5. Monte Carlo Simulation")
+        print("6. Path Analysis")
         print("7. Exit")
         choice = input("Enter your choice: ")
-        if choice == '1':
+        if choice == "1":
             filename = input("Enter filename to load: ")
             tree = load_tree(filename)
-        elif choice == '2':
+        elif choice == "2":
             show_recursive(tree)
-        elif choice == '3':
+        elif choice == "3":
             solve_recursive(tree)
-            print("Tree solved. Optimal strategy calculated.")
-        elif choice == '4':
-            strategy = [0] * len(tree)  # Example strategy
-            results = simulate_recursive(strategy, tree)
-            print("Simulation Results:", results)
-        elif choice == '5':
-            strategy_one = [0] * len(tree)  # Example strategies
-            strategy_two = [0] * len(tree)
-            monte_carlo(strategy_one, strategy_two, tree, start=10, increment=10)
-        elif choice == '6':
-            filename = input("Enter filename to save: ")
-            save_tree(tree, filename)
-        elif choice == '7':
-            print("Exiting program.")
+            print("Tree solved. Optimal strategies computed.")
+        elif choice == "4":
+            simulate_recursive(tree, strategy)
+        elif choice == "5":
+            results = monte_carlo_recursive(tree, strategy, trials=10)
+            print(f"Monte Carlo Results: {results}")
+        elif choice == "6":
+            path_analysis_recursive(tree)
+        elif choice == "7":
             break
         else:
             print("Invalid choice. Try again.")
-
-if __name__ == '__main__':
-    main()

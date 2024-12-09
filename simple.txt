@@ -1,0 +1,14 @@
+node,0
+name,start
+type,d
+length,2
+descendant,1
+descendant,2
+node,1
+name,option_a
+type,t
+pay,50.0
+node,2
+name,option_b
+type,t
+pay,100.0
